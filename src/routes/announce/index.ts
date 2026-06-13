@@ -15,11 +15,23 @@ router.get("/", async (req: Request, res: Response) => {
     const { query } = parse(req.url ?? "", false);
     const params = parseQuery(query ?? undefined);
 
-    const info_hash = params["info_hash"];
-    const peer_id = params["peer_id"];
-    const port = parseInt(params["port"], 10);
+    let raw_info_hash = params["info_hash"];
+    if (Array.isArray(raw_info_hash)) raw_info_hash = raw_info_hash[0];
 
-    if (!info_hash || !peer_id || isNaN(port) || port <= 0 || port > 65535) {
+    let peer_id = params["peer_id"];
+    if (Array.isArray(peer_id)) peer_id = peer_id[0];
+
+    const port = parseInt(params["port"] as string, 10);
+
+    if (
+      !raw_info_hash ||
+      typeof raw_info_hash !== "string" ||
+      !peer_id ||
+      typeof peer_id !== "string" ||
+      isNaN(port) ||
+      port <= 0 ||
+      port > 65535
+    ) {
       res.set("Content-Type", "text/plain");
 
       res.status(400).send(
@@ -31,7 +43,12 @@ router.get("/", async (req: Request, res: Response) => {
       return;
     }
 
-    if (blacklist.includes(info_hash)) {
+    const info_hash_hex =
+      raw_info_hash.length === 20
+        ? Buffer.from(raw_info_hash, "binary").toString("hex").toLowerCase()
+        : raw_info_hash.toLowerCase();
+
+    if (blacklist.includes(info_hash_hex)) {
       res.set("Content-Type", "text/plain");
 
       res.status(403).send(
@@ -44,14 +61,16 @@ router.get("/", async (req: Request, res: Response) => {
       return;
     }
 
-    const uploaded = parseInt(params["uploaded"], 10) || 0;
-    const downloaded = parseInt(params["downloaded"], 10) || 0;
-    const left = parseInt(params["left"], 10) || 0;
-    const event = params["event"];
+    const uploaded = parseInt(params["uploaded"] as string, 10) || 0;
+    const downloaded = parseInt(params["downloaded"] as string, 10) || 0;
+    const left = parseInt(params["left"] as string, 10) || 0;
+    const event = Array.isArray(params["event"])
+      ? params["event"][0]
+      : params["event"];
     const compact = params["compact"] === "1";
 
     const ip = getIP(req);
-    const torrentKey = `torrent:${info_hash}`;
+    const torrentKey = `torrent:${info_hash_hex}`;
 
     if (event === "stopped") {
       await redis.hdel(torrentKey, peer_id);

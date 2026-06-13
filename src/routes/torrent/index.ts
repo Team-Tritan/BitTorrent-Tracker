@@ -8,7 +8,7 @@ const router = Router();
 
 router.get("/:infoHash", async (req: Request, res: Response) => {
   try {
-    const infoHash = req.params.infoHash;
+    const infoHash = req.params.infoHash?.toLowerCase();
 
     if (!infoHash) {
       res.status(400).json({

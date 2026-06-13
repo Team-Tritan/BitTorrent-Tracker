@@ -50,8 +50,15 @@ router.get("/", async (req: Request, res: Response) => {
     const files: Record<string, any> = {};
 
     if (info_hashes.length > 0) {
-      for (const info_hash of info_hashes) {
-        if (blacklist.includes(info_hash)) {
+      for (const raw_info_hash of info_hashes) {
+        if (typeof raw_info_hash !== "string") continue;
+
+        const info_hash_hex =
+          raw_info_hash.length === 20
+            ? Buffer.from(raw_info_hash, "binary").toString("hex").toLowerCase()
+            : raw_info_hash.toLowerCase();
+
+        if (blacklist.includes(info_hash_hex)) {
           res.set("Content-Type", "text/plain");
           res.send(
             bencode.encode({
@@ -62,11 +69,11 @@ router.get("/", async (req: Request, res: Response) => {
           return;
         }
 
-        const torrentKey = `torrent:${info_hash}`;
+        const torrentKey = `torrent:${info_hash_hex}`;
         const counts = await getTorrentCounts(torrentKey);
 
         if (counts) {
-          files[info_hash] = { ...counts, downloaded: 0 };
+          files[raw_info_hash] = { ...counts, downloaded: 0 };
         }
       }
     } else {
@@ -74,13 +81,19 @@ router.get("/", async (req: Request, res: Response) => {
 
       for await (const keys of keyStream) {
         for (const torrentKey of keys) {
-          const info_hash = torrentKey.replace("torrent:", "");
+          const info_hash_hex = torrentKey.replace("torrent:", "");
 
-          if (blacklist.includes(info_hash)) continue;
+          if (blacklist.includes(info_hash_hex)) continue;
           const counts = await getTorrentCounts(torrentKey);
 
           if (counts) {
-            files[info_hash] = { ...counts, downloaded: 0 };
+            let raw_info_hash = info_hash_hex;
+            if (info_hash_hex.length === 40) {
+              raw_info_hash = Buffer.from(info_hash_hex, "hex").toString(
+                "binary",
+              );
+            }
+            files[raw_info_hash] = { ...counts, downloaded: 0 };
           }
         }
       }
