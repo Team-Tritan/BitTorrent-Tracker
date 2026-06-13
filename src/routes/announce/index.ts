@@ -43,10 +43,33 @@ router.get("/", async (req: Request, res: Response) => {
       return;
     }
 
-    const info_hash_hex =
-      raw_info_hash.length === 20
-        ? Buffer.from(raw_info_hash, "binary").toString("hex").toLowerCase()
-        : raw_info_hash.toLowerCase();
+    let info_hash_hex = "";
+    const match = (req.url ?? "").match(/[?&]info_hash=([^&]+)/);
+
+    if (match) {
+      const val = match[1];
+      if (val.length === 40 && /^[0-9a-fA-F]+$/.test(val)) {
+        info_hash_hex = val.toLowerCase();
+      } else {
+        for (let i = 0; i < val.length; i++) {
+          if (val[i] === "%" && i + 2 < val.length) {
+            info_hash_hex += val.substring(i + 1, i + 3).toLowerCase();
+            i += 2;
+          } else {
+            let charHex = val.charCodeAt(i).toString(16).toLowerCase();
+            if (charHex.length === 1) charHex = "0" + charHex;
+            info_hash_hex += charHex;
+          }
+        }
+      }
+    }
+
+    if (info_hash_hex.length !== 40) {
+      info_hash_hex =
+        raw_info_hash.length === 20
+          ? Buffer.from(raw_info_hash, "binary").toString("hex").toLowerCase()
+          : raw_info_hash.toLowerCase();
+    }
 
     if (blacklist.includes(info_hash_hex)) {
       res.set("Content-Type", "text/plain");

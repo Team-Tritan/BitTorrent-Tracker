@@ -50,23 +50,41 @@ router.get("/", async (req: Request, res: Response) => {
     const files: Record<string, any> = {};
 
     if (info_hashes.length > 0) {
-      for (const raw_info_hash of info_hashes) {
+      const urlHashes: string[] = [];
+      const matches = (req.url ?? "").match(/[?&]info_hash=([^&]+)/g) || [];
+
+      for (const match of matches) {
+        const val = match.split("=")[1];
+        if (val.length === 40 && /^[0-9a-fA-F]+$/.test(val)) {
+          urlHashes.push(val.toLowerCase());
+        } else {
+          let hex = "";
+          for (let i = 0; i < val.length; i++) {
+            if (val[i] === "%" && i + 2 < val.length) {
+              hex += val.substring(i + 1, i + 3).toLowerCase();
+              i += 2;
+            } else {
+              let charHex = val.charCodeAt(i).toString(16).toLowerCase();
+              if (charHex.length === 1) charHex = "0" + charHex;
+              hex += charHex;
+            }
+          }
+          if (hex.length === 40) urlHashes.push(hex);
+        }
+      }
+
+      for (let i = 0; i < info_hashes.length; i++) {
+        const raw_info_hash = info_hashes[i];
         if (typeof raw_info_hash !== "string") continue;
 
         const info_hash_hex =
-          raw_info_hash.length === 20
+          urlHashes[i] ||
+          (raw_info_hash.length === 20
             ? Buffer.from(raw_info_hash, "binary").toString("hex").toLowerCase()
-            : raw_info_hash.toLowerCase();
+            : raw_info_hash.toLowerCase());
 
         if (blacklist.includes(info_hash_hex)) {
-          res.set("Content-Type", "text/plain");
-          res.send(
-            bencode.encode({
-              "failure reason":
-                "This torrent is blacklisted due to take-down policy.",
-            }),
-          );
-          return;
+          continue;
         }
 
         const torrentKey = `torrent:${info_hash_hex}`;
